@@ -5,9 +5,40 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
-    <TextView
-        android:layout_width="match_parent"
+    <EditText
+        android:id="@+id/currency_input"
+        android:layout_width="250dp"
         android:layout_height="wrap_content"
-        android:text="text"
-        android:id="@+id/text"/>
+        android:inputType="numberDecimal"
+        android:text="@string/default_currency_amount" />
+
+    <Spinner
+        android:id="@+id/first_currency_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="45dp"
+        android:layout_toEndOf="@+id/currency_input" />
+
+    <EditText
+        android:id="@+id/currency_output"
+        android:layout_width="250dp"
+        android:layout_height="45dp"
+        android:layout_below="@+id/currency_input"
+        android:text="@string/default_currency_amount"
+        android:inputType="none"/>
+
+    <Spinner
+        android:id="@+id/second_currency_spinner"
+        android:layout_width="match_parent"
+        android:layout_height="45dp"
+        android:layout_below="@+id/first_currency_spinner"
+        android:layout_toEndOf="@+id/currency_output" />
+
+    <Button
+        android:id="@+id/button_convert"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/currency_output"
+        android:layout_centerHorizontal="true"
+        android:text="@string/convert" />
+
 </RelativeLayout>
