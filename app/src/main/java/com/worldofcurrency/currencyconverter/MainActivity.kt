@@ -1,5 +1,6 @@
 package com.worldofcurrency.currencyconverter
 
+import android.media.MediaPlayer
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
@@ -31,6 +32,7 @@ class MainActivity : AppCompatActivity() {
         output = findViewById(R.id.currency_output)
         requestQueue = Volley.newRequestQueue(this)
 
+
         val getCurrencyRequest = JsonObjectRequest(
             Request.Method.GET,
             "https://api.fastforex.io/currencies?api_key=demo",
@@ -53,14 +55,17 @@ class MainActivity : AppCompatActivity() {
                 )
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                 spinner1?.adapter = adapter
+                spinner1?.setSelection(1)
                 spinner2?.adapter = adapter
             },
             { })
 
         requestQueue?.add(getCurrencyRequest)
 
+        val mediaPlayer = MediaPlayer.create(this, R.raw.button_click);
         val button = findViewById<Button>(R.id.button_convert)
         button.setOnClickListener {
+            mediaPlayer.start()
             val amount = input?.text.toString().toDouble()
             val from = spinner1?.selectedItem.toString()
             val to = spinner2?.selectedItem.toString()
