@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
         checkPermission(
             arrayOf(
                 Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
             ), FILES_PERMISSION_CODE
         )
         initial()
@@ -129,14 +129,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkPermission(permissions: Array<String>, requestCode: Int) {
-        var allPermissionsGranted = true
+        var permissionsGranted = false
         for (permission in permissions) {
-            allPermissionsGranted = allPermissionsGranted && ActivityCompat.checkSelfPermission(
+            permissionsGranted = permissionsGranted || ActivityCompat.checkSelfPermission(
                 this,
                 permission
             ) == PackageManager.PERMISSION_GRANTED
         }
-        if (!allPermissionsGranted) {
+        if (!permissionsGranted) {
             ActivityCompat.requestPermissions(this, permissions, requestCode)
         }
     }
@@ -158,8 +158,6 @@ class MainActivity : AppCompatActivity() {
                     || (grantResults.size > 1 && grantResults[1] == PackageManager.PERMISSION_GRANTED)
                 ) {
                     determineCurrentCurrency()
-                } else {
-                    showToast("Without location permission this application cannot determine your current currency")
                 }
             }
             FILES_PERMISSION_CODE -> {
@@ -175,8 +173,8 @@ class MainActivity : AppCompatActivity() {
         //permission request if necessary
         checkPermission(
             arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION
             ), LOCATION_PERMISSION_CODE
         )
 
