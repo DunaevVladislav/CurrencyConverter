@@ -6,6 +6,7 @@ import android.location.Address
 import android.location.Geocoder
 import android.location.LocationManager
 import android.media.MediaPlayer
+import android.os.Build
 import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -15,6 +16,7 @@ import com.android.volley.RequestQueue
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
 import java.util.*
+import android.widget.ArrayAdapter
 
 
 class MainActivity : AppCompatActivity() {
@@ -22,29 +24,70 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val NET_PERMISSION_CODE = 100
         private const val LOCATION_PERMISSION_CODE = 101
+        private const val FILES_PERMISSION_CODE = 102
     }
 
     private var requestQueue: RequestQueue? = null
+    private var exchangeDbHelper: ExchangeDbHelper? = null
+
     private var spinner1: Spinner? = null
     private var spinner2: Spinner? = null
     private var input: EditText? = null
     private var output: TextView? = null
+    private var exchangesView: ListView? = null
+    private var adapterForExchangesView: ArrayAdapter<ExchangeModel>? = null
+    private var listOfExchanges = mutableListOf<ExchangeModel>()
+
     private var currentCurrency: String? = null
+    private var listOfAvailableCurrencies = mutableListOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        checkPermission(arrayOf(Manifest.permission.INTERNET), NET_PERMISSION_CODE)
+        checkPermission(
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ), FILES_PERMISSION_CODE
+        )
+        initial()
+        setCovertButtonListener()
+    }
+
+    override fun onDestroy() {
+        exchangeDbHelper?.close()
+        super.onDestroy()
+    }
+
+    private fun initial(){
         requestQueue = Volley.newRequestQueue(this)
+        exchangeDbHelper = ExchangeDbHelper(this)
         spinner1 = findViewById(R.id.first_currency_spinner)
         spinner2 = findViewById(R.id.second_currency_spinner)
         input = findViewById(R.id.currency_input)
         output = findViewById(R.id.currency_output)
+        exchangesView = findViewById(R.id.exchangesView)
 
-        checkPermission(arrayOf(Manifest.permission.INTERNET), NET_PERMISSION_CODE)
         determineCurrentCurrency()
         determineListOfCurrencies()
+        loadAllExchanges()
+    }
 
+    private fun loadAllExchanges(){
+        run {
+            val allEntries = exchangeDbHelper?.getAllEntries()
+            if (allEntries != null) {
+                listOfExchanges = allEntries.asReversed().toMutableList()
+            }
+            adapterForExchangesView =
+                ArrayAdapter(this, android.R.layout.simple_list_item_1, listOfExchanges)
+            exchangesView?.setAdapter(adapterForExchangesView)
+        }
+    }
+
+    private fun setCovertButtonListener(){
         val mediaPlayer = MediaPlayer.create(this, R.raw.button_click)
         val button = findViewById<Button>(R.id.button_convert)
         button.setOnClickListener {
@@ -54,12 +97,33 @@ class MainActivity : AppCompatActivity() {
             val to = spinner2?.selectedItem.toString()
             val convertRequest = JsonObjectRequest(
                 Request.Method.GET,
-                getString(R.string.api_fastforex, "convert", "from=$from&to=$to&amount=$amount", "demo"),
+                getString(
+                    R.string.api_fastforex,
+                    "convert",
+                    "from=$from&to=$to&amount=$amount",
+                    "demo"
+                ),
                 null,
                 { jsonResponse ->
-                    output?.text = jsonResponse.getJSONObject("result").getString(to)
+                    if (!jsonResponse.has("result")) {
+                        var msg = "Cannot exchange currencies."
+                        if (jsonResponse.has("Error")) {
+                            msg += " Error: " + jsonResponse.getString("Error")
+                        }
+                        showToast(msg)
+                        return@JsonObjectRequest
+                    }
+
+                    val result = jsonResponse.getJSONObject("result").getDouble(to)
+                    output?.text = result.toString()
+                    val newExchange = ExchangeModel(from, to, amount, result, Date())
+                    exchangeDbHelper?.addEntry(newExchange)
+                    listOfExchanges.add(0, newExchange)
+                    adapterForExchangesView?.notifyDataSetChanged()
                 },
-                { })
+                {
+                    showToast(it.localizedMessage ?: "Error: $it")
+                })
             requestQueue?.add(convertRequest)
         }
     }
@@ -98,6 +162,11 @@ class MainActivity : AppCompatActivity() {
                     showToast("Without location permission this application cannot determine your current currency")
                 }
             }
+            FILES_PERMISSION_CODE -> {
+                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                    showToast("Without permission for work with files this application cannot save exchange history")
+                }
+            }
         }
 
     }
@@ -120,6 +189,7 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+            determineCurrentCurrencyByResources()
             return
         }
 
@@ -133,12 +203,51 @@ class MainActivity : AppCompatActivity() {
                 if (addresses != null && addresses.isNotEmpty()) {
                     val currency = Currency.getInstance(addresses[0].locale)
                     currentCurrency = currency.currencyCode
+                    assignListOfCurrencies()
                     break
                 }
             } catch (e: Exception) {
             }
         }
 
+        if (currentCurrency.isNullOrEmpty()) {
+            determineCurrentCurrencyByResources()
+        }
+
+    }
+
+    private fun determineCurrentCurrencyByResources(){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val locales = resources.configuration.locales
+            for(i in 0 until locales.size()){
+                val locale = locales.get(i)
+                val currency = Currency.getInstance(locale)
+                currentCurrency = currency.currencyCode
+                assignListOfCurrencies()
+            }
+        }
+    }
+
+    private fun assignListOfCurrencies(){
+        if (listOfAvailableCurrencies.isNotEmpty() && currentCurrency != null){
+            if (currentCurrency != "USD" && currentCurrency != "EUR") {
+                listOfAvailableCurrencies.remove(currentCurrency)
+                listOfAvailableCurrencies.add(0, currentCurrency!!)
+            } else if (currentCurrency == "EUR") {
+                listOfAvailableCurrencies[0] = "EUR"
+                listOfAvailableCurrencies[1] = "USD"
+            }
+        }
+
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            listOfAvailableCurrencies.toTypedArray()
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinner1?.adapter = adapter
+        spinner1?.setSelection(1)
+        spinner2?.adapter = adapter
     }
 
     private fun determineListOfCurrencies() {
@@ -157,31 +266,13 @@ class MainActivity : AppCompatActivity() {
                     return@JsonObjectRequest
                 }
 
-                val currencyList =
+                listOfAvailableCurrencies =
                     jsonResponse.getJSONObject("currencies").keys().asSequence().toMutableList()
-                currencyList.remove("EUR")
-                currencyList.add(0, "EUR")
-                currencyList.remove("USD")
-                currencyList.add(0, "USD")
-                if (currentCurrency != null) {
-                    if (currentCurrency != "USD" && currentCurrency != "EUR") {
-                        currencyList.remove(currentCurrency)
-                        currencyList.add(0, currentCurrency)
-                    } else if (currentCurrency == "EUR") {
-                        currencyList[0] = "EUR"
-                        currencyList[1] = "USD"
-                    }
-                }
-
-                val adapter = ArrayAdapter(
-                    this,
-                    android.R.layout.simple_spinner_item,
-                    currencyList.toTypedArray()
-                )
-                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                spinner1?.adapter = adapter
-                spinner1?.setSelection(1)
-                spinner2?.adapter = adapter
+                listOfAvailableCurrencies.remove("EUR")
+                listOfAvailableCurrencies.add(0, "EUR")
+                listOfAvailableCurrencies.remove("USD")
+                listOfAvailableCurrencies.add(0, "USD")
+                assignListOfCurrencies()
             },
             {
                 showToast(it.localizedMessage ?: "Error: $it")

@@ -41,4 +41,10 @@
         android:layout_centerHorizontal="true"
         android:text="@string/convert" />
 
+    <ListView
+        android:id="@+id/exchangesView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/button_convert" />
+
 </RelativeLayout>
