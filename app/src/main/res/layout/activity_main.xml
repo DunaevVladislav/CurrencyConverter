@@ -40,10 +40,27 @@
         android:layout_centerHorizontal="true"
         android:text="@string/convert" />
 
+    <ImageView
+        android:id="@+id/image_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@+id/button_convert" />
+
     <ListView
-        android:id="@+id/exchangesView"
+        android:id="@+id/exchanges_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@+id/button_convert" />
+        android:layout_above="@+id/button_change_background"
+        android:layout_below="@+id/button_convert"
+        android:background="@android:color/transparent"
+        android:cacheColorHint="@android:color/transparent" />
+
+    <Button
+        android:id="@+id/button_change_background"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:text="@string/change_background" />
 
 </RelativeLayout>

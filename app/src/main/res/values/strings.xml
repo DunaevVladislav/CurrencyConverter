@@ -1,6 +1,8 @@
 <resources>
     <string name="app_name">CurrencyConverter</string>
     <string name="convert">Convert</string>
+    <string name="change_background">Change background</string>
     <string name="default_currency_amount">1</string>
+    <string name="background_image_name">background_image.png</string>
     <string name="api_fastforex">https://api.fastforex.io/%1$s?%2$s&amp;api_key=%3$s</string>
 </resources>

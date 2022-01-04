@@ -1,22 +1,28 @@
 package com.worldofcurrency.currencyconverter
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.location.Address
 import android.location.Geocoder
 import android.location.LocationManager
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.android.volley.Request
 import com.android.volley.RequestQueue
 import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
+import java.io.*
 import java.util.*
-import android.widget.ArrayAdapter
 
 
 class MainActivity : AppCompatActivity() {
@@ -25,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         private const val NET_PERMISSION_CODE = 100
         private const val LOCATION_PERMISSION_CODE = 101
         private const val FILES_PERMISSION_CODE = 102
+        private const val CAMERA_PERMISSION_CODE = 103
     }
 
     private var requestQueue: RequestQueue? = null
@@ -34,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private var spinner2: Spinner? = null
     private var input: EditText? = null
     private var output: TextView? = null
+    private var imageView: ImageView? = null
     private var exchangesView: ListView? = null
     private var adapterForExchangesView: ArrayAdapter<ExchangeModel>? = null
     private var listOfExchanges = mutableListOf<ExchangeModel>()
@@ -54,6 +62,7 @@ class MainActivity : AppCompatActivity() {
         )
         initial()
         setCovertButtonListener()
+        setChangeBackgroundButtonListener()
     }
 
     override fun onDestroy() {
@@ -61,21 +70,23 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun initial(){
+    private fun initial() {
         requestQueue = Volley.newRequestQueue(this)
         exchangeDbHelper = ExchangeDbHelper(this)
         spinner1 = findViewById(R.id.first_currency_spinner)
         spinner2 = findViewById(R.id.second_currency_spinner)
         input = findViewById(R.id.currency_input)
         output = findViewById(R.id.currency_output)
-        exchangesView = findViewById(R.id.exchangesView)
+        imageView = findViewById(R.id.image_view)
+        exchangesView = findViewById(R.id.exchanges_view)
 
         determineCurrentCurrency()
         determineListOfCurrencies()
         loadAllExchanges()
+        loadBackground()
     }
 
-    private fun loadAllExchanges(){
+    private fun loadAllExchanges() {
         run {
             val allEntries = exchangeDbHelper?.getAllEntries()
             if (allEntries != null) {
@@ -87,7 +98,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setCovertButtonListener(){
+    private fun setCovertButtonListener() {
         val mediaPlayer = MediaPlayer.create(this, R.raw.button_click)
         val button = findViewById<Button>(R.id.button_convert)
         button.setOnClickListener {
@@ -128,6 +139,93 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var launchPickFromGalleryActivity =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val data: Intent? = result.data
+                try {
+                    val imageUri = data!!.data!!
+                    val imageStream = contentResolver.openInputStream(imageUri)
+                    val bitmap = BitmapFactory.decodeStream(imageStream)
+                    ImageStorageManager.saveToInternalStorage(
+                        this,
+                        bitmap,
+                        getString(R.string.background_image_name)
+                    )
+                    imageView?.setImageBitmap(bitmap)
+                } catch (e: FileNotFoundException) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+    private var launchPickFromCamera =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                val data: Intent? = result.data
+                try {
+                    val bitmap = data!!.extras!!.get("data") as Bitmap
+                    ImageStorageManager.saveToInternalStorage(
+                        this,
+                        bitmap,
+                        getString(R.string.background_image_name)
+                    )
+                    imageView?.setImageBitmap(bitmap)
+                } catch (e: FileNotFoundException) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+    fun openGalleryForPickBackground() {
+        checkPermission(
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            ), FILES_PERMISSION_CODE
+        )
+        launchPickFromGalleryActivity.launch(
+            Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        )
+    }
+
+    fun openCameraForPickBackground() {
+        checkPermission(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_CODE)
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            launchPickFromCamera.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE))
+        }
+
+    }
+
+    fun deleteBackground() {
+        ImageStorageManager.deleteImageFromInternalStorage(
+            this,
+            getString(R.string.background_image_name)
+        )
+        imageView?.setImageResource(0)
+    }
+
+    private fun loadBackground() {
+        val bitmap = ImageStorageManager.getImageFromInternalStorage(
+            this,
+            getString(R.string.background_image_name)
+        )
+        if (bitmap != null) {
+            imageView?.setImageBitmap(bitmap)
+        }
+    }
+
+    private fun setChangeBackgroundButtonListener() {
+        findViewById<Button>(R.id.button_change_background).setOnClickListener {
+            val pickImageDialogFragment = PickImageDialogFragment()
+            pickImageDialogFragment.show(supportFragmentManager, "pickImageDialogFragment")
+        }
+    }
+
     private fun checkPermission(permissions: Array<String>, requestCode: Int) {
         var permissionsGranted = false
         for (permission in permissions) {
@@ -163,6 +261,11 @@ class MainActivity : AppCompatActivity() {
             FILES_PERMISSION_CODE -> {
                 if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
                     showToast("Without permission for work with files this application cannot save exchange history")
+                }
+            }
+            CAMERA_PERMISSION_CODE -> {
+                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                    showToast("You cannot take photo to set background without permission for work with camera")
                 }
             }
         }
@@ -214,10 +317,10 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    private fun determineCurrentCurrencyByResources(){
+    private fun determineCurrentCurrencyByResources() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             val locales = resources.configuration.locales
-            for(i in 0 until locales.size()){
+            for (i in 0 until locales.size()) {
                 val locale = locales.get(i)
                 val currency = Currency.getInstance(locale)
                 currentCurrency = currency.currencyCode
@@ -226,8 +329,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun assignListOfCurrencies(){
-        if (listOfAvailableCurrencies.isNotEmpty() && currentCurrency != null){
+    private fun assignListOfCurrencies() {
+        if (listOfAvailableCurrencies.isNotEmpty() && currentCurrency != null) {
             if (currentCurrency != "USD" && currentCurrency != "EUR") {
                 listOfAvailableCurrencies.remove(currentCurrency)
                 listOfAvailableCurrencies.add(0, currentCurrency!!)
