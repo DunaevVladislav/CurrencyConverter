@@ -12,7 +12,7 @@ class PickImageDialogFragment : DialogFragment() {
         val items = arrayOf("Pick from gallery", "Take photo", "Delete background")
         return activity?.let {
             val builder = AlertDialog.Builder(it)
-            builder.setTitle("Выберите кота")
+            builder.setTitle("Choose")
                 .setItems(
                     items
                 ) { _, which ->
